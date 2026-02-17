@@ -15,9 +15,29 @@ use ratatui::layout::{Constraint, Layout};
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let mut terminal = tui::init()?;
+    // Initialize calendar BEFORE entering TUI so permission dialog can appear
+    eprintln!("Connecting to Apple Calendar...");
     let mut app = App::new()?;
+    eprintln!("Calendar ready. Launching TUI...");
 
+    // Set up panic hook to restore terminal on crash
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = tui::restore();
+        original_hook(panic_info);
+    }));
+
+    let mut terminal = tui::init()?;
+
+    let result = run(&mut terminal, &mut app);
+
+    // Always restore terminal
+    tui::restore()?;
+
+    result
+}
+
+fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
     while app.running {
         terminal.draw(|frame| {
             let area = frame.area();
@@ -102,6 +122,5 @@ fn main() -> Result<()> {
         }
     }
 
-    tui::restore()?;
     Ok(())
 }

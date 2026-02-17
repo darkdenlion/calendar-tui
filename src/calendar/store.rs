@@ -8,7 +8,7 @@ use objc2::runtime::Bool;
 use objc2_event_kit::{
     EKAuthorizationStatus, EKEntityType, EKEvent, EKEventStore,
 };
-use objc2_foundation::{NSDate, NSError};
+use objc2_foundation::{NSDate, NSError, NSRunLoop};
 use ratatui::style::Color;
 
 use super::calendar::CalendarInfo;
@@ -52,10 +52,26 @@ impl Store {
                 .requestFullAccessToEventsWithCompletion(&*block as *const _ as *mut _);
         }
 
-        let granted = rx
-            .recv()
-            .map_err(|_| eyre!("Failed to receive calendar access response"))?;
-        Ok(granted)
+        // Spin the run loop so the completion handler can fire
+        let run_loop = NSRunLoop::currentRunLoop();
+        loop {
+            match rx.try_recv() {
+                Ok(granted) => return Ok(granted),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    return Err(eyre!("Calendar access request failed"));
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // Run the run loop briefly to process pending callbacks
+                    let until = NSDate::dateWithTimeIntervalSinceNow(0.1);
+                    let _ran = unsafe {
+                        run_loop.runMode_beforeDate(
+                            objc2_foundation::NSDefaultRunLoopMode,
+                            &until,
+                        )
+                    };
+                }
+            }
+        }
     }
 
     pub fn calendars(&self) -> Vec<CalendarInfo> {
@@ -191,13 +207,19 @@ fn convert_event(ev: &EKEvent) -> Option<CalendarEvent> {
     })
 }
 
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGColorGetNumberOfComponents(color: *const std::ffi::c_void) -> usize;
+    fn CGColorGetComponents(color: *const std::ffi::c_void) -> *const f64;
+}
+
 fn calendar_color(cal: &objc2_event_kit::EKCalendar) -> Color {
     unsafe {
         if let Some(cg_color) = cal.CGColor() {
-            use objc2::msg_send;
-            let num_components: usize = msg_send![&*cg_color, numberOfComponents];
+            let ptr = &*cg_color as *const _ as *const std::ffi::c_void;
+            let num_components = CGColorGetNumberOfComponents(ptr);
             if num_components >= 3 {
-                let components: *const f64 = msg_send![&*cg_color, components];
+                let components = CGColorGetComponents(ptr);
                 let r = *components;
                 let g = *components.add(1);
                 let b = *components.add(2);
