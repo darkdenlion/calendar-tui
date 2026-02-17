@@ -180,7 +180,7 @@ fn handle_form_input(app: &mut App, code: KeyCode, _modifiers: KeyModifiers) {
 fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_width: u16) {
     if total_width < 60 {
         components::MonthView::render(
-            frame, area, app.selected_date, app.today, &app.days_with_events,
+            frame, area, app.selected_date, app.today, &app.days_with_events, &app.days_with_reminders,
         );
     } else {
         let month_w = if total_width >= 100 { 44 } else { 30 };
@@ -191,7 +191,7 @@ fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_
         .split(area);
 
         components::MonthView::render(
-            frame, content[0], app.selected_date, app.today, &app.days_with_events,
+            frame, content[0], app.selected_date, app.today, &app.days_with_events, &app.days_with_reminders,
         );
 
         components::DayView::render(

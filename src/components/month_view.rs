@@ -23,6 +23,7 @@ impl MonthView {
         selected_date: NaiveDate,
         today: NaiveDate,
         days_with_events: &HashSet<u32>,
+        days_with_reminders: &HashSet<u32>,
     ) {
         let year = selected_date.year();
         let month = selected_date.month();
@@ -86,15 +87,23 @@ impl MonthView {
                     let day = current_day as u32;
                     let date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
                     let has_event = days_with_events.contains(&day);
+                    let has_reminder = days_with_reminders.contains(&day);
+
+                    // Marker: * for events, . for reminders, + for both
+                    let marker = match (has_event, has_reminder) {
+                        (true, true) => "+",
+                        (true, false) => "*",
+                        (false, true) => ".",
+                        (false, false) => " ",
+                    };
 
                     let day_str = if compact {
-                        if has_event {
-                            format!("{:>width$}", format!("{}*", day), width = cell_w)
+                        if marker != " " {
+                            format!("{:>width$}", format!("{}{}", day, marker), width = cell_w)
                         } else {
                             format!("{:>width$}", day, width = cell_w)
                         }
                     } else {
-                        let marker = if has_event { "*" } else { " " };
                         let num = format!("{:>2}{}", day, marker);
                         format!("{:^width$}", num, width = cell_w)
                     };

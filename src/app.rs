@@ -40,6 +40,7 @@ pub struct App {
     pub week_events: Vec<CalendarEvent>,
     pub day_events: Vec<CalendarEvent>,
     pub days_with_events: HashSet<u32>,
+    pub days_with_reminders: HashSet<u32>,
     pub access_granted: bool,
     pub day_scroll: usize,
     // Reminders (inline in day view)
@@ -68,6 +69,7 @@ impl App {
             week_events: Vec::new(),
             day_events: Vec::new(),
             days_with_events: HashSet::new(),
+            days_with_reminders: HashSet::new(),
             access_granted: false,
             day_scroll: 0,
             reminders: Vec::new(),
@@ -103,9 +105,19 @@ impl App {
             }
         }
 
-        // Fetch reminders and filter for the selected day
+        // Fetch reminders and populate day + month indicators
         self.refresh_reminders();
         self.day_reminders = self.filter_day_reminders();
+
+        self.days_with_reminders.clear();
+        for rem in &self.reminders {
+            if let Some(due) = &rem.due_date {
+                let due_date = due.date_naive();
+                if due_date.year() == year && due_date.month() == month {
+                    self.days_with_reminders.insert(due_date.day());
+                }
+            }
+        }
     }
 
     pub fn refresh_reminders(&mut self) {
