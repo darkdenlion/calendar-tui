@@ -88,6 +88,13 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 components::EventForm::render(frame, area, form, &app.calendars);
             }
 
+            // Render detail popup overlay
+            if let Some(ref detail) = app.detail_item {
+                components::day_view::render_detail_popup(
+                    frame, area, detail, &app.day_events, &app.day_reminders,
+                );
+            }
+
             // Status bar
             render_status_bar(frame, layout[1], app, w);
         })?;
@@ -95,6 +102,14 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
         if let Some(key) = event::next_key_event(Duration::from_millis(100))? {
             // Clear status message on any key
             app.status_message = None;
+
+            // Detail popup takes priority
+            if app.detail_item.is_some() {
+                if key.code == KeyCode::Esc {
+                    app.close_detail();
+                }
+                continue;
+            }
 
             match app.input_mode {
                 InputMode::Form => handle_form_input(app, key.code, key.modifiers),
@@ -124,6 +139,7 @@ fn handle_normal_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         (KeyCode::Char('n'), _) => app.open_event_form(),
         (KeyCode::Char('d'), _) => app.delete_selected_event(),
         (KeyCode::Char(' '), _) => app.toggle_day_reminder(),
+        (KeyCode::Enter, _) => app.show_detail(),
         (KeyCode::Left, _) => app.prev_day(),
         (KeyCode::Right, _) => app.next_day(),
         (KeyCode::Up, _) => {

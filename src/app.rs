@@ -48,6 +48,8 @@ pub struct App {
     pub day_reminders: Vec<Reminder>,
     // Event form
     pub form_state: Option<EventFormState>,
+    // Detail popup (index into day_events or day_reminders via DayAction)
+    pub detail_item: Option<DayAction>,
     // Status message
     pub status_message: Option<String>,
     store: Store,
@@ -75,6 +77,7 @@ impl App {
             reminders: Vec::new(),
             day_reminders: Vec::new(),
             form_state: None,
+            detail_item: None,
             status_message: None,
             store,
         };
@@ -325,6 +328,22 @@ impl App {
                 }
             }
         }
+    }
+
+    // ── Detail popup ──
+
+    pub fn show_detail(&mut self) {
+        let action = self.day_action_at_scroll();
+        match action {
+            DayAction::Event(_) | DayAction::Reminder(_) => {
+                self.detail_item = Some(action);
+            }
+            DayAction::None => {}
+        }
+    }
+
+    pub fn close_detail(&mut self) {
+        self.detail_item = None;
     }
 
     // ── Event form ──
