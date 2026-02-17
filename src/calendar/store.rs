@@ -1,7 +1,7 @@
 use std::sync::mpsc;
 
 use block2::RcBlock;
-use chrono::{DateTime, Local, NaiveDate, TimeZone};
+use chrono::{Datelike, DateTime, Local, NaiveDate, TimeZone};
 use color_eyre::eyre::{eyre, Result};
 use objc2::rc::Retained;
 use objc2::runtime::Bool;
@@ -119,6 +119,23 @@ impl Store {
             .expect("valid local datetime");
         let end_dt = Local
             .from_local_datetime(&end_of_day)
+            .single()
+            .expect("valid local datetime");
+
+        self.events_in_range(start_dt, end_dt)
+    }
+
+    pub fn events_for_week(&self, date: NaiveDate) -> Vec<CalendarEvent> {
+        let days_since_sunday = date.weekday().num_days_from_sunday();
+        let week_start = date - chrono::Duration::days(days_since_sunday as i64);
+        let week_end = week_start + chrono::Duration::days(7);
+
+        let start_dt = Local
+            .from_local_datetime(&week_start.and_hms_opt(0, 0, 0).unwrap())
+            .single()
+            .expect("valid local datetime");
+        let end_dt = Local
+            .from_local_datetime(&week_end.and_hms_opt(0, 0, 0).unwrap())
             .single()
             .expect("valid local datetime");
 

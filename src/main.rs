@@ -41,6 +41,7 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
     while app.running {
         terminal.draw(|frame| {
             let area = frame.area();
+            let w = area.width;
 
             if !app.access_granted {
                 let msg = ratatui::widgets::Paragraph::new(
@@ -60,42 +61,28 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
             ])
             .split(area);
 
-            match app.view_mode {
-                ViewMode::Month => {
-                    let content = Layout::horizontal([
-                        Constraint::Length(42), // month grid
-                        Constraint::Min(30),   // day agenda
-                    ])
-                    .split(layout[0]);
+            let content_area = layout[0];
 
-                    components::MonthView::render(
+            match app.view_mode {
+                ViewMode::Month => render_month_layout(frame, content_area, app, w),
+                ViewMode::Week => {
+                    components::WeekView::render(
                         frame,
-                        content[0],
+                        content_area,
                         app.selected_date,
                         app.today,
-                        &app.days_with_events,
-                    );
-
-                    components::DayView::render(
-                        frame,
-                        content[1],
-                        app.selected_date,
-                        &app.day_events,
+                        app.week_start(),
+                        &app.week_events,
                     );
                 }
                 ViewMode::Day => {
                     components::DayView::render(
                         frame,
-                        layout[0],
+                        content_area,
                         app.selected_date,
                         &app.day_events,
+                        app.day_scroll,
                     );
-                }
-                ViewMode::Week => {
-                    // TODO: Week view (Phase 2)
-                    let msg = ratatui::widgets::Paragraph::new("Week view - coming soon")
-                        .style(theme::DIM_STYLE);
-                    frame.render_widget(msg, layout[0]);
                 }
             }
 
@@ -113,8 +100,20 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 (KeyCode::Char('t'), _) => app.go_to_today(),
                 (KeyCode::Left, _) => app.prev_day(),
                 (KeyCode::Right, _) => app.next_day(),
-                (KeyCode::Up, _) => app.prev_week(),
-                (KeyCode::Down, _) => app.next_week(),
+                (KeyCode::Up, _) => {
+                    if app.view_mode == ViewMode::Day {
+                        app.scroll_day_up();
+                    } else {
+                        app.prev_week();
+                    }
+                }
+                (KeyCode::Down, _) => {
+                    if app.view_mode == ViewMode::Day {
+                        app.scroll_day_down();
+                    } else {
+                        app.next_week();
+                    }
+                }
                 (KeyCode::Char('['), _) => app.prev_month(),
                 (KeyCode::Char(']'), _) => app.next_month(),
                 _ => {}
@@ -123,4 +122,50 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Responsive month layout:
+/// - Narrow (<60): month grid only, no sidebar
+/// - Medium (60-99): month grid (fixed) + day agenda sidebar
+/// - Wide (100+): month grid (fixed) + spacious day agenda
+fn render_month_layout(
+    frame: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
+    app: &App,
+    total_width: u16,
+) {
+    if total_width < 60 {
+        // Narrow: month grid only, full width
+        components::MonthView::render(
+            frame,
+            area,
+            app.selected_date,
+            app.today,
+            &app.days_with_events,
+        );
+    } else {
+        // Side by side: month grid + day agenda
+        let month_w = if total_width >= 100 { 44 } else { 30 };
+        let content = Layout::horizontal([
+            Constraint::Length(month_w),
+            Constraint::Min(20),
+        ])
+        .split(area);
+
+        components::MonthView::render(
+            frame,
+            content[0],
+            app.selected_date,
+            app.today,
+            &app.days_with_events,
+        );
+
+        components::DayView::render(
+            frame,
+            content[1],
+            app.selected_date,
+            &app.day_events,
+            app.day_scroll,
+        );
+    }
 }

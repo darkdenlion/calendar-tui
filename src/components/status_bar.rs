@@ -12,17 +12,28 @@ pub struct StatusBar;
 
 impl StatusBar {
     pub fn render(frame: &mut Frame, area: Rect, mode: &ViewMode) {
+        let w = area.width as usize;
+
         let mode_str = match mode {
             ViewMode::Month => "[1]Month",
             ViewMode::Week => "[2]Week",
             ViewMode::Day => "[3]Day",
         };
 
-        let hints = " arrows:Navigate  [/]:Month  t:Today  q:Quit";
+        let hints = if w >= 70 {
+            " \u{2190}\u{2191}\u{2192}\u{2193}:Navigate  [/]:Month  t:Today  q:Quit"
+        } else if w >= 40 {
+            " arrows:Nav [/]:Mon t:Today q:Quit"
+        } else {
+            " q:Quit"
+        };
+
+        let padding = " ".repeat(w.saturating_sub(mode_str.len() + 1 + hints.len()));
 
         let line = Line::from(vec![
             Span::styled(format!(" {} ", mode_str), theme::STATUS_STYLE),
-            Span::styled(hints, theme::STATUS_STYLE),
+            Span::styled(padding, theme::STATUS_STYLE),
+            Span::styled(hints.to_string(), theme::STATUS_STYLE),
         ]);
 
         let bar = Paragraph::new(line).style(theme::STATUS_STYLE);

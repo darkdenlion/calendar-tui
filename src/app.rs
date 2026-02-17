@@ -19,9 +19,11 @@ pub struct App {
     pub today: NaiveDate,
     pub calendars: Vec<CalendarInfo>,
     pub month_events: Vec<CalendarEvent>,
+    pub week_events: Vec<CalendarEvent>,
     pub day_events: Vec<CalendarEvent>,
     pub days_with_events: HashSet<u32>,
     pub access_granted: bool,
+    pub day_scroll: usize,
     store: Store,
 }
 
@@ -37,9 +39,11 @@ impl App {
             today,
             calendars: Vec::new(),
             month_events: Vec::new(),
+            week_events: Vec::new(),
             day_events: Vec::new(),
             days_with_events: HashSet::new(),
             access_granted: false,
+            day_scroll: 0,
             store,
         };
 
@@ -58,6 +62,8 @@ impl App {
 
         self.month_events = self.store.events_for_month(year, month);
         self.day_events = self.store.events_for_date(self.selected_date);
+        self.week_events = self.store.events_for_week(self.selected_date);
+        self.day_scroll = 0;
 
         self.days_with_events.clear();
         for ev in &self.month_events {
@@ -66,6 +72,10 @@ impl App {
                 self.days_with_events.insert(ev_date.day());
             }
         }
+    }
+
+    pub fn week_start(&self) -> NaiveDate {
+        week_start_of(self.selected_date)
     }
 
     pub fn next_day(&mut self) {
@@ -134,15 +144,26 @@ impl App {
         self.on_date_changed();
     }
 
+    pub fn scroll_day_down(&mut self) {
+        if self.day_scroll < self.day_events.len().saturating_sub(1) {
+            self.day_scroll += 1;
+        }
+    }
+
+    pub fn scroll_day_up(&mut self) {
+        self.day_scroll = self.day_scroll.saturating_sub(1);
+    }
+
     fn on_date_changed(&mut self) {
         let old_month = self.month_events.first().map(|e| e.start.date_naive().month());
         let new_month = self.selected_date.month();
+        self.day_scroll = 0;
 
-        // Only refetch month events if the month changed
         if old_month != Some(new_month) || self.month_events.is_empty() {
             self.refresh_events();
         } else {
             self.day_events = self.store.events_for_date(self.selected_date);
+            self.week_events = self.store.events_for_week(self.selected_date);
         }
     }
 }
@@ -156,4 +177,9 @@ fn days_in_month(year: i32, month: u32) -> u32 {
     .unwrap()
     .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
     .num_days() as u32
+}
+
+fn week_start_of(date: NaiveDate) -> NaiveDate {
+    let days_since_sunday = date.weekday().num_days_from_sunday();
+    date - chrono::Duration::days(days_since_sunday as i64)
 }

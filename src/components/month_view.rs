@@ -11,7 +11,8 @@ use ratatui::{
 
 use crate::theme;
 
-const DAY_NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_NAMES_SHORT: [&str; 7] = ["S", "M", "T", "W", "T", "F", "S"];
+const DAY_NAMES_MED: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 pub struct MonthView;
 
@@ -25,12 +26,19 @@ impl MonthView {
     ) {
         let year = selected_date.year();
         let month = selected_date.month();
+        let w = area.width as usize;
 
-        let title = format!(
-            " {} {} ",
-            month_name(month),
-            year
-        );
+        // Adaptive cell width based on available space
+        // border takes 2 chars, 7 columns needed
+        let inner_w = w.saturating_sub(2);
+        let cell_w = (inner_w / 7).max(2);
+        let compact = cell_w < 4;
+
+        let title = if w >= 22 {
+            format!(" {} {} ", month_name(month), year)
+        } else {
+            format!(" {}/{} ", month, year)
+        };
 
         let block = Block::default()
             .title(title)
@@ -41,36 +49,54 @@ impl MonthView {
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
+        if inner.width == 0 || inner.height == 0 {
+            return;
+        }
+
         // Header row
-        let header_cells: Vec<Span> = DAY_NAMES
+        let day_names = if compact { &DAY_NAMES_SHORT } else { &DAY_NAMES_MED };
+        let header_cells: Vec<Span> = day_names
             .iter()
-            .map(|d| Span::styled(format!("{:^5}", d), theme::HEADER_STYLE))
+            .map(|d| {
+                let formatted = if compact {
+                    format!("{:^width$}", d, width = cell_w)
+                } else {
+                    format!("{:^width$}", d, width = cell_w)
+                };
+                Span::styled(formatted, theme::HEADER_STYLE)
+            })
             .collect();
         let header = Line::from(header_cells);
 
         // Calculate grid
         let first_day = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
         let first_weekday = first_day.weekday().num_days_from_sunday() as usize;
-        let days_in_month = days_in_month(year, month);
+        let dim = days_in_month(year, month);
 
         // Build weeks
         let mut weeks: Vec<Line> = Vec::new();
         let mut current_day: i32 = 1 - first_weekday as i32;
 
-        while current_day <= days_in_month as i32 {
+        while current_day <= dim as i32 {
             let mut cells: Vec<Span> = Vec::new();
             for _ in 0..7 {
-                if current_day < 1 || current_day > days_in_month as i32 {
-                    cells.push(Span::raw("     "));
+                if current_day < 1 || current_day > dim as i32 {
+                    cells.push(Span::raw(" ".repeat(cell_w)));
                 } else {
                     let day = current_day as u32;
                     let date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
                     let has_event = days_with_events.contains(&day);
 
-                    let day_str = if has_event {
-                        format!("{:>2}* ", day)
+                    let day_str = if compact {
+                        if has_event {
+                            format!("{:>width$}", format!("{}*", day), width = cell_w)
+                        } else {
+                            format!("{:>width$}", day, width = cell_w)
+                        }
                     } else {
-                        format!("{:>2}  ", day)
+                        let marker = if has_event { "*" } else { " " };
+                        let num = format!("{:>2}{}", day, marker);
+                        format!("{:^width$}", num, width = cell_w)
                     };
 
                     let style = if date == today && date == selected_date {
@@ -82,31 +108,39 @@ impl MonthView {
                         theme::SELECTED_STYLE
                     } else if date == today {
                         theme::TODAY_STYLE
-                    } else if date.month() != month {
-                        theme::DIM_STYLE
                     } else {
                         Style::default()
                     };
 
-                    cells.push(Span::styled(format!(" {}", day_str), style));
+                    cells.push(Span::styled(day_str, style));
                 }
                 current_day += 1;
             }
             weeks.push(Line::from(cells));
         }
 
-        // Layout: header + weeks
-        let mut constraints = vec![Constraint::Length(1)]; // header
+        // Layout: header + weeks, adapt row height to fill space
+        let available_rows = inner.height as usize;
+        let total_rows = 1 + weeks.len(); // header + weeks
+        let row_height = if available_rows > total_rows {
+            (available_rows / total_rows).max(1)
+        } else {
+            1
+        };
+
+        let mut constraints = vec![Constraint::Length(1)]; // header always 1 row
         for _ in &weeks {
-            constraints.push(Constraint::Length(1));
+            constraints.push(Constraint::Length(row_height as u16));
         }
-        constraints.push(Constraint::Min(0)); // fill remaining
+        constraints.push(Constraint::Min(0));
 
         let rows = Layout::vertical(constraints).split(inner);
 
         frame.render_widget(Paragraph::new(header), rows[0]);
         for (i, week) in weeks.iter().enumerate() {
-            frame.render_widget(Paragraph::new(week.clone()), rows[i + 1]);
+            if i + 1 < rows.len() {
+                frame.render_widget(Paragraph::new(week.clone()), rows[i + 1]);
+            }
         }
     }
 }
