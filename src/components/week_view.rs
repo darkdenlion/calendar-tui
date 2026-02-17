@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, Timelike};
+use chrono::{Local, NaiveDate, Timelike};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
@@ -186,6 +186,55 @@ impl WeekView {
                     let para = Paragraph::new(lines);
                     frame.render_widget(para, cell_area);
                 }
+            }
+        }
+
+        // ── Current time indicator ──
+        let now = Local::now();
+        let now_date = now.date_naive();
+        let now_hour = now.hour();
+        let now_minute = now.minute();
+
+        // Check if today is in this week and current hour is visible
+        if now_date >= week_start
+            && now_date < week_start + chrono::Duration::days(7)
+            && now_hour >= hour_start
+            && now_hour < hour_start + visible_hours as u32
+        {
+            let day_offset = (now_date - week_start).num_days() as usize;
+            let hour_idx = (now_hour - hour_start) as usize;
+            let row_idx = hour_idx + 1;
+
+            if row_idx < rows.len() {
+                let row_area = rows[row_idx];
+                // Calculate sub-row position based on minute
+                let y_offset = (now_minute as u16 * row_area.height) / 60;
+                let line_y = row_area.y + y_offset.min(row_area.height.saturating_sub(1));
+
+                // Draw across the today column
+                let col_idx = day_offset + 1;
+                if col_idx < cols.len() {
+                    let col_area = cols[col_idx];
+                    let now_line_area = Rect::new(col_area.x, line_y, col_area.width, 1);
+                    let now_indicator = Paragraph::new(Line::from(Span::styled(
+                        "\u{2500}".repeat(col_area.width as usize),
+                        Style::default().fg(ratatui::style::Color::Red),
+                    )));
+                    frame.render_widget(now_indicator, now_line_area);
+                }
+
+                // Also mark the time label
+                let time_area = cols[0];
+                let label_area = Rect::new(time_area.x, line_y, time_area.width, 1);
+                let now_time_str = format!("{:>2}:{:02}", now_hour, now_minute);
+                let padded = format!("{:<width$}", now_time_str, width = time_area.width as usize);
+                let time_label = Paragraph::new(Line::from(Span::styled(
+                    padded,
+                    Style::default()
+                        .fg(ratatui::style::Color::Red)
+                        .add_modifier(Modifier::BOLD),
+                )));
+                frame.render_widget(time_label, label_area);
             }
         }
     }
