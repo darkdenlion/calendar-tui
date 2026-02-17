@@ -141,7 +141,7 @@ fn format_event(ev: &CalendarEvent, max_width: usize, is_all_day: bool) -> ListI
 fn format_reminder(
     rem: &Reminder,
     _max_width: usize,
-    current_date: NaiveDate,
+    _current_date: NaiveDate,
 ) -> ListItem<'static> {
     let cal_indicator = Span::styled("  ", Style::default().bg(rem.calendar_color));
 
@@ -161,20 +161,11 @@ fn format_reminder(
 
     let mut spans = vec![cal_indicator, checkbox_span, title_span];
 
-    // Show due date context
-    if let Some(due) = &rem.due_date {
-        let due_date = due.date_naive();
-        if due_date < current_date {
-            spans.push(Span::styled(
-                format!(" (overdue: {})", due_date.format("%m/%d")),
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::DIM),
-            ));
-        }
-    } else {
-        spans.push(Span::styled(" (no date)", theme::DIM_STYLE));
-    }
+    // Show calendar name for context
+    spans.push(Span::styled(
+        format!(" ({})", rem.calendar_name),
+        theme::DIM_STYLE,
+    ));
 
     ListItem::new(Line::from(spans))
 }

@@ -196,20 +196,14 @@ impl App {
 
     // ── Reminders (inline in day view) ──
 
-    /// Filter reminders for the selected date:
-    /// - Reminders due on this date
-    /// - If viewing today, also include overdue and undated reminders
+    /// Filter reminders for the selected date — only show reminders due on that exact date.
     fn filter_day_reminders(&self) -> Vec<Reminder> {
         let date = self.selected_date;
-        let today = self.today;
         self.reminders
             .iter()
             .filter(|r| match r.due_date {
-                Some(due) => {
-                    let due_date = due.date_naive();
-                    due_date == date || (date == today && due_date < today)
-                }
-                None => date == today,
+                Some(due) => due.date_naive() == date,
+                None => false,
             })
             .cloned()
             .collect()
