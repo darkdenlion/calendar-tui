@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use ratatui::style::Color;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Reminder {
     pub id: String,
     pub title: String,

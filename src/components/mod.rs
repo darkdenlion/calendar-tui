@@ -6,8 +6,7 @@ pub mod status_bar;
 pub mod week_view;
 
 pub use day_view::DayView;
-pub use event_form::{EventForm, EventFormState};
+pub use event_form::EventForm;
 pub use month_view::MonthView;
 pub use reminder_list::ReminderList;
-pub use status_bar::StatusBar;
 pub use week_view::WeekView;

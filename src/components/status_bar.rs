@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
@@ -8,8 +9,10 @@ use ratatui::{
 use crate::app::ViewMode;
 use crate::theme;
 
+#[allow(dead_code)]
 pub struct StatusBar;
 
+#[allow(dead_code)]
 impl StatusBar {
     pub fn render(frame: &mut Frame, area: Rect, mode: &ViewMode) {
         let w = area.width as usize;

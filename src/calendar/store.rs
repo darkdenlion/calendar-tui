@@ -32,6 +32,7 @@ impl Store {
         unsafe { EKEventStore::authorizationStatusForEntityType(EKEntityType::Event) }
     }
 
+    #[allow(dead_code)]
     pub fn reminder_authorization_status() -> EKAuthorizationStatus {
         unsafe { EKEventStore::authorizationStatusForEntityType(EKEntityType::Reminder) }
     }
@@ -99,6 +100,7 @@ impl Store {
         convert_calendars(&ek_calendars)
     }
 
+    #[allow(dead_code)]
     pub fn reminder_calendars(&self) -> Vec<CalendarInfo> {
         let ek_calendars = unsafe {
             self.store.calendarsForEntityType(EKEntityType::Reminder)
@@ -243,6 +245,7 @@ impl Store {
 
     // ── Reminder queries ──
 
+    #[allow(dead_code)]
     pub fn fetch_reminders(&self) -> Vec<Reminder> {
         let predicate = unsafe {
             self.store.predicateForRemindersInCalendars(None)

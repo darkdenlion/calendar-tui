@@ -7,20 +7,18 @@ mod tui;
 
 use std::time::Duration;
 
-use app::{App, ViewMode};
+use app::{App, InputMode, ViewMode};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyModifiers};
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Rect};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    // Initialize calendar BEFORE entering TUI so permission dialog can appear
     eprintln!("Connecting to Apple Calendar...");
     let mut app = App::new()?;
     eprintln!("Calendar ready. Launching TUI...");
 
-    // Set up panic hook to restore terminal on crash
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let _ = tui::restore();
@@ -28,12 +26,8 @@ fn main() -> Result<()> {
     }));
 
     let mut terminal = tui::init()?;
-
     let result = run(&mut terminal, &mut app);
-
-    // Always restore terminal
     tui::restore()?;
-
     result
 }
 
@@ -55,20 +49,35 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 return;
             }
 
+            // Main layout: content + status bar
             let layout = Layout::vertical([
-                Constraint::Min(1),    // main content
-                Constraint::Length(1), // status bar
+                Constraint::Min(1),
+                Constraint::Length(1),
             ])
             .split(area);
 
             let content_area = layout[0];
 
+            // Split content: main view + optional reminder sidebar
+            let (main_area, reminder_area) = if app.show_reminders && w >= 50 {
+                let reminder_w = if w >= 100 { 30 } else { 22 };
+                let split = Layout::horizontal([
+                    Constraint::Min(20),
+                    Constraint::Length(reminder_w),
+                ])
+                .split(content_area);
+                (split[0], Some(split[1]))
+            } else {
+                (content_area, None)
+            };
+
+            // Render main view
             match app.view_mode {
-                ViewMode::Month => render_month_layout(frame, content_area, app, w),
+                ViewMode::Month => render_month_layout(frame, main_area, app, main_area.width),
                 ViewMode::Week => {
                     components::WeekView::render(
                         frame,
-                        content_area,
+                        main_area,
                         app.selected_date,
                         app.today,
                         app.week_start(),
@@ -78,7 +87,7 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 ViewMode::Day => {
                     components::DayView::render(
                         frame,
-                        content_area,
+                        main_area,
                         app.selected_date,
                         &app.day_events,
                         app.day_scroll,
@@ -86,37 +95,34 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 }
             }
 
-            components::StatusBar::render(frame, layout[1], &app.view_mode);
+            // Render reminder sidebar
+            if let Some(rem_area) = reminder_area {
+                components::ReminderList::render(
+                    frame,
+                    rem_area,
+                    &app.reminders,
+                    app.reminder_index,
+                    app.input_mode == InputMode::Reminders,
+                );
+            }
+
+            // Render event form overlay
+            if let Some(ref form) = app.form_state {
+                components::EventForm::render(frame, area, form, &app.calendars);
+            }
+
+            // Status bar
+            render_status_bar(frame, layout[1], app, w);
         })?;
 
         if let Some(key) = event::next_key_event(Duration::from_millis(100))? {
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                    app.running = false;
-                }
-                (KeyCode::Char('1'), _) => app.view_mode = ViewMode::Month,
-                (KeyCode::Char('2'), _) => app.view_mode = ViewMode::Week,
-                (KeyCode::Char('3'), _) => app.view_mode = ViewMode::Day,
-                (KeyCode::Char('t'), _) => app.go_to_today(),
-                (KeyCode::Left, _) => app.prev_day(),
-                (KeyCode::Right, _) => app.next_day(),
-                (KeyCode::Up, _) => {
-                    if app.view_mode == ViewMode::Day {
-                        app.scroll_day_up();
-                    } else {
-                        app.prev_week();
-                    }
-                }
-                (KeyCode::Down, _) => {
-                    if app.view_mode == ViewMode::Day {
-                        app.scroll_day_down();
-                    } else {
-                        app.next_week();
-                    }
-                }
-                (KeyCode::Char('['), _) => app.prev_month(),
-                (KeyCode::Char(']'), _) => app.next_month(),
-                _ => {}
+            // Clear status message on any key
+            app.status_message = None;
+
+            match app.input_mode {
+                InputMode::Form => handle_form_input(app, key.code, key.modifiers),
+                InputMode::Reminders => handle_reminder_input(app, key.code, key.modifiers),
+                InputMode::Normal => handle_normal_input(app, key.code, key.modifiers),
             }
         }
     }
@@ -124,27 +130,102 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
     Ok(())
 }
 
-/// Responsive month layout:
-/// - Narrow (<60): month grid only, no sidebar
-/// - Medium (60-99): month grid (fixed) + day agenda sidebar
-/// - Wide (100+): month grid (fixed) + spacious day agenda
-fn render_month_layout(
-    frame: &mut ratatui::Frame,
-    area: ratatui::layout::Rect,
-    app: &App,
-    total_width: u16,
-) {
+fn handle_normal_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+    match (code, modifiers) {
+        (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+            app.running = false;
+        }
+        (KeyCode::Char('1'), _) => app.view_mode = ViewMode::Month,
+        (KeyCode::Char('2'), _) => app.view_mode = ViewMode::Week,
+        (KeyCode::Char('3'), _) => app.view_mode = ViewMode::Day,
+        (KeyCode::Char('t'), _) => app.go_to_today(),
+        (KeyCode::Char('r'), _) => app.toggle_reminder_panel(),
+        (KeyCode::Char('n'), _) => app.open_event_form(),
+        (KeyCode::Char('d'), _) => app.delete_selected_event(),
+        (KeyCode::Left, _) => app.prev_day(),
+        (KeyCode::Right, _) => app.next_day(),
+        (KeyCode::Up, _) => {
+            if app.view_mode == ViewMode::Day {
+                app.scroll_day_up();
+            } else {
+                app.prev_week();
+            }
+        }
+        (KeyCode::Down, _) => {
+            if app.view_mode == ViewMode::Day {
+                app.scroll_day_down();
+            } else {
+                app.next_week();
+            }
+        }
+        (KeyCode::Char('['), _) => app.prev_month(),
+        (KeyCode::Char(']'), _) => app.next_month(),
+        _ => {}
+    }
+}
+
+fn handle_form_input(app: &mut App, code: KeyCode, _modifiers: KeyModifiers) {
+    match code {
+        KeyCode::Esc => app.close_event_form(),
+        KeyCode::Enter => app.submit_event_form(),
+        KeyCode::Tab => app.form_tab(),
+        KeyCode::BackTab => app.form_backtab(),
+        KeyCode::Backspace => app.form_backspace(),
+        KeyCode::Char(' ') => {
+            // Space toggles all-day or cycles calendar
+            if let Some(ref form) = app.form_state {
+                match form.active_field {
+                    crate::components::event_form::FormField::AllDay => {
+                        if let Some(ref mut f) = app.form_state {
+                            f.toggle_all_day();
+                        }
+                    }
+                    crate::components::event_form::FormField::Calendar => {
+                        let total = app.calendars.len();
+                        if let Some(ref mut f) = app.form_state {
+                            f.next_calendar(total);
+                        }
+                    }
+                    _ => app.form_input_char(' '),
+                }
+            }
+        }
+        KeyCode::Char(c) => app.form_input_char(c),
+        _ => {}
+    }
+}
+
+fn handle_reminder_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+    match (code, modifiers) {
+        (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
+            app.show_reminders = false;
+            app.input_mode = InputMode::Normal;
+        }
+        (KeyCode::Char('r'), _) => app.toggle_reminder_panel(),
+        (KeyCode::Char('n'), _) => app.open_event_form(),
+        (KeyCode::Up, _) | (KeyCode::Char('k'), _) => app.reminder_prev(),
+        (KeyCode::Down, _) | (KeyCode::Char('j'), _) => app.reminder_next(),
+        (KeyCode::Char(' '), _) | (KeyCode::Enter, _) => app.toggle_selected_reminder(),
+        (KeyCode::Tab, _) => {
+            // Switch focus back to calendar
+            app.input_mode = InputMode::Normal;
+        }
+        (KeyCode::Char('1'), _) => { app.view_mode = ViewMode::Month; app.input_mode = InputMode::Normal; }
+        (KeyCode::Char('2'), _) => { app.view_mode = ViewMode::Week; app.input_mode = InputMode::Normal; }
+        (KeyCode::Char('3'), _) => { app.view_mode = ViewMode::Day; app.input_mode = InputMode::Normal; }
+        (KeyCode::Char('t'), _) => app.go_to_today(),
+        (KeyCode::Char('['), _) => app.prev_month(),
+        (KeyCode::Char(']'), _) => app.next_month(),
+        _ => {}
+    }
+}
+
+fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_width: u16) {
     if total_width < 60 {
-        // Narrow: month grid only, full width
         components::MonthView::render(
-            frame,
-            area,
-            app.selected_date,
-            app.today,
-            &app.days_with_events,
+            frame, area, app.selected_date, app.today, &app.days_with_events,
         );
     } else {
-        // Side by side: month grid + day agenda
         let month_w = if total_width >= 100 { 44 } else { 30 };
         let content = Layout::horizontal([
             Constraint::Length(month_w),
@@ -153,19 +234,54 @@ fn render_month_layout(
         .split(area);
 
         components::MonthView::render(
-            frame,
-            content[0],
-            app.selected_date,
-            app.today,
-            &app.days_with_events,
+            frame, content[0], app.selected_date, app.today, &app.days_with_events,
         );
 
         components::DayView::render(
-            frame,
-            content[1],
-            app.selected_date,
-            &app.day_events,
-            app.day_scroll,
+            frame, content[1], app.selected_date, &app.day_events, app.day_scroll,
         );
     }
+}
+
+fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App, w: u16) {
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::Paragraph;
+
+    let w = w as usize;
+
+    let mode_str = match app.view_mode {
+        ViewMode::Month => "[1]Month",
+        ViewMode::Week => "[2]Week",
+        ViewMode::Day => "[3]Day",
+    };
+
+    let focus_indicator = match app.input_mode {
+        InputMode::Reminders => " [Reminders]",
+        InputMode::Form => " [New Event]",
+        InputMode::Normal => "",
+    };
+
+    // Show status message if present, otherwise show hints
+    let right_text = if let Some(ref msg) = app.status_message {
+        format!(" {} ", msg)
+    } else if w >= 75 {
+        " \u{2190}\u{2191}\u{2192}\u{2193}:Nav [/]:Mon t:Today r:Rem n:New d:Del q:Quit".to_string()
+    } else if w >= 50 {
+        " arrows:Nav r:Rem n:New d:Del q:Quit".to_string()
+    } else {
+        " q:Quit".to_string()
+    };
+
+    let left = format!(" {}{} ", mode_str, focus_indicator);
+    let padding_len = w.saturating_sub(left.len() + right_text.len());
+    let padding = " ".repeat(padding_len);
+
+    let line = Line::from(vec![
+        Span::styled(left, theme::STATUS_STYLE),
+        Span::styled(padding, theme::STATUS_STYLE),
+        Span::styled(right_text, theme::STATUS_STYLE),
+    ]);
+
+    let bar = Paragraph::new(line).style(theme::STATUS_STYLE);
+    frame.render_widget(bar, area);
 }
