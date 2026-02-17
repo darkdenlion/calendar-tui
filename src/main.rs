@@ -58,26 +58,13 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
 
             let content_area = layout[0];
 
-            // Split content: main view + optional reminder sidebar
-            let (main_area, reminder_area) = if app.show_reminders && w >= 50 {
-                let reminder_w = if w >= 100 { 30 } else { 22 };
-                let split = Layout::horizontal([
-                    Constraint::Min(20),
-                    Constraint::Length(reminder_w),
-                ])
-                .split(content_area);
-                (split[0], Some(split[1]))
-            } else {
-                (content_area, None)
-            };
-
             // Render main view
             match app.view_mode {
-                ViewMode::Month => render_month_layout(frame, main_area, app, main_area.width),
+                ViewMode::Month => render_month_layout(frame, content_area, app, w),
                 ViewMode::Week => {
                     components::WeekView::render(
                         frame,
-                        main_area,
+                        content_area,
                         app.selected_date,
                         app.today,
                         app.week_start(),
@@ -87,23 +74,13 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 ViewMode::Day => {
                     components::DayView::render(
                         frame,
-                        main_area,
+                        content_area,
                         app.selected_date,
                         &app.day_events,
+                        &app.day_reminders,
                         app.day_scroll,
                     );
                 }
-            }
-
-            // Render reminder sidebar
-            if let Some(rem_area) = reminder_area {
-                components::ReminderList::render(
-                    frame,
-                    rem_area,
-                    &app.reminders,
-                    app.reminder_index,
-                    app.input_mode == InputMode::Reminders,
-                );
             }
 
             // Render event form overlay
@@ -121,8 +98,8 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
 
             match app.input_mode {
                 InputMode::Form => handle_form_input(app, key.code, key.modifiers),
-                InputMode::Reminders => handle_reminder_input(app, key.code, key.modifiers),
                 InputMode::Normal => handle_normal_input(app, key.code, key.modifiers),
+                _ => {}
             }
         }
     }
@@ -139,9 +116,14 @@ fn handle_normal_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         (KeyCode::Char('2'), _) => app.view_mode = ViewMode::Week,
         (KeyCode::Char('3'), _) => app.view_mode = ViewMode::Day,
         (KeyCode::Char('t'), _) => app.go_to_today(),
-        (KeyCode::Char('r'), _) => app.toggle_reminder_panel(),
+        (KeyCode::Char('r'), _) => {
+            // Refresh reminders
+            app.refresh_reminders();
+            app.status_message = Some("Reminders refreshed".to_string());
+        }
         (KeyCode::Char('n'), _) => app.open_event_form(),
         (KeyCode::Char('d'), _) => app.delete_selected_event(),
+        (KeyCode::Char(' '), _) => app.toggle_day_reminder(),
         (KeyCode::Left, _) => app.prev_day(),
         (KeyCode::Right, _) => app.next_day(),
         (KeyCode::Up, _) => {
@@ -195,31 +177,6 @@ fn handle_form_input(app: &mut App, code: KeyCode, _modifiers: KeyModifiers) {
     }
 }
 
-fn handle_reminder_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    match (code, modifiers) {
-        (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
-            app.show_reminders = false;
-            app.input_mode = InputMode::Normal;
-        }
-        (KeyCode::Char('r'), _) => app.toggle_reminder_panel(),
-        (KeyCode::Char('n'), _) => app.open_event_form(),
-        (KeyCode::Up, _) | (KeyCode::Char('k'), _) => app.reminder_prev(),
-        (KeyCode::Down, _) | (KeyCode::Char('j'), _) => app.reminder_next(),
-        (KeyCode::Char(' '), _) | (KeyCode::Enter, _) => app.toggle_selected_reminder(),
-        (KeyCode::Tab, _) => {
-            // Switch focus back to calendar
-            app.input_mode = InputMode::Normal;
-        }
-        (KeyCode::Char('1'), _) => { app.view_mode = ViewMode::Month; app.input_mode = InputMode::Normal; }
-        (KeyCode::Char('2'), _) => { app.view_mode = ViewMode::Week; app.input_mode = InputMode::Normal; }
-        (KeyCode::Char('3'), _) => { app.view_mode = ViewMode::Day; app.input_mode = InputMode::Normal; }
-        (KeyCode::Char('t'), _) => app.go_to_today(),
-        (KeyCode::Char('['), _) => app.prev_month(),
-        (KeyCode::Char(']'), _) => app.next_month(),
-        _ => {}
-    }
-}
-
 fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_width: u16) {
     if total_width < 60 {
         components::MonthView::render(
@@ -238,7 +195,12 @@ fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_
         );
 
         components::DayView::render(
-            frame, content[1], app.selected_date, &app.day_events, app.day_scroll,
+            frame,
+            content[1],
+            app.selected_date,
+            &app.day_events,
+            &app.day_reminders,
+            app.day_scroll,
         );
     }
 }
@@ -256,18 +218,18 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App, w: u16) 
     };
 
     let focus_indicator = match app.input_mode {
-        InputMode::Reminders => " [Reminders]",
         InputMode::Form => " [New Event]",
         InputMode::Normal => "",
+        _ => "",
     };
 
     // Show status message if present, otherwise show hints
     let right_text = if let Some(ref msg) = app.status_message {
         format!(" {} ", msg)
-    } else if w >= 75 {
-        " \u{2190}\u{2191}\u{2192}\u{2193}:Nav [/]:Mon t:Today r:Rem n:New d:Del q:Quit".to_string()
+    } else if w >= 80 {
+        " \u{2190}\u{2191}\u{2192}\u{2193}:Nav [/]:Mon t:Today n:New d:Del Sp:Toggle q:Quit".to_string()
     } else if w >= 50 {
-        " arrows:Nav r:Rem n:New d:Del q:Quit".to_string()
+        " arrows:Nav n:New d:Del Sp:Toggle q:Quit".to_string()
     } else {
         " q:Quit".to_string()
     };

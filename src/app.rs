@@ -17,7 +17,16 @@ pub enum ViewMode {
 pub enum InputMode {
     Normal,
     Form,
+    #[allow(dead_code)]
     Reminders,
+}
+
+/// Identifies what kind of item is at a given scroll position in the day view.
+#[derive(Debug, Clone, Copy)]
+pub enum DayAction {
+    None,
+    Event(usize),
+    Reminder(usize),
 }
 
 pub struct App {
@@ -33,10 +42,9 @@ pub struct App {
     pub days_with_events: HashSet<u32>,
     pub access_granted: bool,
     pub day_scroll: usize,
-    // Reminders
+    // Reminders (inline in day view)
     pub reminders: Vec<Reminder>,
-    pub show_reminders: bool,
-    pub reminder_index: usize,
+    pub day_reminders: Vec<Reminder>,
     // Event form
     pub form_state: Option<EventFormState>,
     // Status message
@@ -63,8 +71,7 @@ impl App {
             access_granted: false,
             day_scroll: 0,
             reminders: Vec::new(),
-            show_reminders: false,
-            reminder_index: 0,
+            day_reminders: Vec::new(),
             form_state: None,
             status_message: None,
             store,
@@ -95,6 +102,10 @@ impl App {
                 self.days_with_events.insert(ev_date.day());
             }
         }
+
+        // Fetch reminders and filter for the selected day
+        self.refresh_reminders();
+        self.day_reminders = self.filter_day_reminders();
     }
 
     pub fn refresh_reminders(&mut self) {
@@ -159,7 +170,7 @@ impl App {
     }
 
     pub fn scroll_day_down(&mut self) {
-        if self.day_scroll < self.day_events.len().saturating_sub(1) {
+        if self.day_scroll < self.day_list_len().saturating_sub(1) {
             self.day_scroll += 1;
         }
     }
@@ -168,47 +179,137 @@ impl App {
         self.day_scroll = self.day_scroll.saturating_sub(1);
     }
 
-    // ── Reminders ──
+    // ── Reminders (inline in day view) ──
 
-    pub fn toggle_reminder_panel(&mut self) {
-        self.show_reminders = !self.show_reminders;
-        if self.show_reminders {
-            self.refresh_reminders();
-            self.input_mode = InputMode::Reminders;
-        } else {
-            self.input_mode = InputMode::Normal;
-        }
-    }
-
-    pub fn reminder_next(&mut self) {
-        if !self.reminders.is_empty() {
-            self.reminder_index = (self.reminder_index + 1) % self.reminders.len();
-        }
-    }
-
-    pub fn reminder_prev(&mut self) {
-        if !self.reminders.is_empty() {
-            self.reminder_index = self
-                .reminder_index
-                .checked_sub(1)
-                .unwrap_or(self.reminders.len() - 1);
-        }
-    }
-
-    pub fn toggle_selected_reminder(&mut self) {
-        if let Some(reminder) = self.reminders.get(self.reminder_index) {
-            let id = reminder.id.clone();
-            match self.store.toggle_reminder(&id) {
-                Ok(new_state) => {
-                    let action = if new_state { "completed" } else { "uncompleted" };
-                    self.status_message = Some(format!("Reminder {}", action));
-                    self.refresh_reminders();
-                    if self.reminder_index >= self.reminders.len() && !self.reminders.is_empty() {
-                        self.reminder_index = self.reminders.len() - 1;
-                    }
+    /// Filter reminders for the selected date:
+    /// - Reminders due on this date
+    /// - If viewing today, also include overdue and undated reminders
+    fn filter_day_reminders(&self) -> Vec<Reminder> {
+        let date = self.selected_date;
+        let today = self.today;
+        self.reminders
+            .iter()
+            .filter(|r| match r.due_date {
+                Some(due) => {
+                    let due_date = due.date_naive();
+                    due_date == date || (date == today && due_date < today)
                 }
-                Err(e) => {
-                    self.status_message = Some(format!("Error: {}", e));
+                None => date == today,
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Total number of visual items in the day list (headers + items + spacers).
+    pub fn day_list_len(&self) -> usize {
+        let all_day = self.day_events.iter().filter(|e| e.is_all_day).count();
+        let timed = self.day_events.iter().filter(|e| !e.is_all_day).count();
+        let rems = self.day_reminders.len();
+
+        let mut len = 0;
+        if all_day > 0 {
+            len += 1 + all_day; // header + items
+            if rems > 0 || timed > 0 {
+                len += 1; // spacer
+            }
+        }
+        if rems > 0 {
+            len += 1 + rems; // header + items
+            if timed > 0 {
+                len += 1; // spacer
+            }
+        }
+        len += timed;
+        len
+    }
+
+    /// Determine what kind of item is at the current scroll position.
+    pub fn day_action_at_scroll(&self) -> DayAction {
+        let all_day_indices: Vec<usize> = self
+            .day_events
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.is_all_day)
+            .map(|(i, _)| i)
+            .collect();
+        let timed_indices: Vec<usize> = self
+            .day_events
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| !e.is_all_day)
+            .map(|(i, _)| i)
+            .collect();
+        let rems = self.day_reminders.len();
+        let scroll = self.day_scroll;
+
+        let mut pos = 0;
+
+        // All-day section
+        if !all_day_indices.is_empty() {
+            if scroll == pos {
+                return DayAction::None;
+            }
+            pos += 1; // header
+            for &idx in &all_day_indices {
+                if scroll == pos {
+                    return DayAction::Event(idx);
+                }
+                pos += 1;
+            }
+            if rems > 0 || !timed_indices.is_empty() {
+                if scroll == pos {
+                    return DayAction::None;
+                }
+                pos += 1; // spacer
+            }
+        }
+
+        // Reminders section
+        if rems > 0 {
+            if scroll == pos {
+                return DayAction::None;
+            }
+            pos += 1; // header
+            for i in 0..rems {
+                if scroll == pos {
+                    return DayAction::Reminder(i);
+                }
+                pos += 1;
+            }
+            if !timed_indices.is_empty() {
+                if scroll == pos {
+                    return DayAction::None;
+                }
+                pos += 1; // spacer
+            }
+        }
+
+        // Timed events
+        for &idx in &timed_indices {
+            if scroll == pos {
+                return DayAction::Event(idx);
+            }
+            pos += 1;
+        }
+
+        DayAction::None
+    }
+
+    /// Toggle the reminder at the current scroll position (if it is a reminder).
+    pub fn toggle_day_reminder(&mut self) {
+        if let DayAction::Reminder(rem_idx) = self.day_action_at_scroll() {
+            if let Some(reminder) = self.day_reminders.get(rem_idx) {
+                let id = reminder.id.clone();
+                match self.store.toggle_reminder(&id) {
+                    Ok(new_state) => {
+                        let action = if new_state { "completed" } else { "uncompleted" };
+                        self.status_message = Some(format!("Reminder {}", action));
+                        self.refresh_reminders();
+                        self.day_reminders = self.filter_day_reminders();
+                    }
+                    Err(e) => {
+                        self.status_message = Some(format!("Error: {}", e));
+                    }
                 }
             }
         }
@@ -223,11 +324,7 @@ impl App {
 
     pub fn close_event_form(&mut self) {
         self.form_state = None;
-        self.input_mode = if self.show_reminders {
-            InputMode::Reminders
-        } else {
-            InputMode::Normal
-        };
+        self.input_mode = InputMode::Normal;
     }
 
     pub fn submit_event_form(&mut self) {
@@ -295,20 +392,20 @@ impl App {
     // ── Event deletion ──
 
     pub fn delete_selected_event(&mut self) {
-        if self.day_events.is_empty() {
-            return;
-        }
-        let idx = self.day_scroll.min(self.day_events.len().saturating_sub(1));
-        let event_id = self.day_events[idx].id.clone();
-        let event_title = self.day_events[idx].title.clone();
+        if let DayAction::Event(idx) = self.day_action_at_scroll() {
+            if let Some(ev) = self.day_events.get(idx) {
+                let event_id = ev.id.clone();
+                let event_title = ev.title.clone();
 
-        match self.store.delete_event(&event_id) {
-            Ok(()) => {
-                self.status_message = Some(format!("Deleted: {}", event_title));
-                self.refresh_events();
-            }
-            Err(e) => {
-                self.status_message = Some(format!("Error: {}", e));
+                match self.store.delete_event(&event_id) {
+                    Ok(()) => {
+                        self.status_message = Some(format!("Deleted: {}", event_title));
+                        self.refresh_events();
+                    }
+                    Err(e) => {
+                        self.status_message = Some(format!("Error: {}", e));
+                    }
+                }
             }
         }
     }
@@ -325,6 +422,7 @@ impl App {
         } else {
             self.day_events = self.store.events_for_date(self.selected_date);
             self.week_events = self.store.events_for_week(self.selected_date);
+            self.day_reminders = self.filter_day_reminders();
         }
     }
 }
