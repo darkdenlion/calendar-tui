@@ -21,6 +21,7 @@ impl DayView {
         events: &[CalendarEvent],
         reminders: &[Reminder],
         selected: usize,
+        reminder_progress: Option<(usize, usize)>, // (completed, total)
     ) {
         let w = area.width as usize;
 
@@ -83,12 +84,46 @@ impl DayView {
             }
         }
 
-        // Reminders section
+        // Reminders section with progress bar
         if !reminders.is_empty() {
-            items.push(ListItem::new(Line::from(Span::styled(
-                "Reminders",
-                Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-            ))));
+            let header_line = if let Some((completed, total)) = reminder_progress {
+                if total > 0 {
+                    let bar_w = (inner_w).saturating_sub(16).min(20).max(4);
+                    let filled = if total > 0 {
+                        (completed * bar_w) / total
+                    } else {
+                        0
+                    };
+                    let empty = bar_w - filled;
+                    let bar = format!(
+                        "\u{2588}{}{}",
+                        "\u{2588}".repeat(filled),
+                        "\u{2591}".repeat(empty),
+                    );
+                    Line::from(vec![
+                        Span::styled(
+                            "Reminders ",
+                            Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                        ),
+                        Span::styled(bar, Style::default().fg(Color::Green)),
+                        Span::styled(
+                            format!(" {}/{}", completed, total),
+                            theme::DIM_STYLE,
+                        ),
+                    ])
+                } else {
+                    Line::from(Span::styled(
+                        "Reminders",
+                        Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    ))
+                }
+            } else {
+                Line::from(Span::styled(
+                    "Reminders",
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                ))
+            };
+            items.push(ListItem::new(header_line));
             for rem in reminders {
                 items.push(format_reminder(rem, inner_w, date));
             }

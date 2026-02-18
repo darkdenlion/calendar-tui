@@ -72,6 +72,11 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                     );
                 }
                 ViewMode::Day => {
+                    let progress = if app.day_total_reminders > 0 {
+                        Some((app.day_completed_count, app.day_total_reminders))
+                    } else {
+                        None
+                    };
                     components::DayView::render(
                         frame,
                         content_area,
@@ -79,6 +84,7 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                         &app.day_events,
                         &app.day_reminders,
                         app.day_scroll,
+                        progress,
                     );
                 }
             }
@@ -224,6 +230,11 @@ fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_
             frame, content[0], app.selected_date, app.today, &app.days_with_events, &app.days_with_reminders,
         );
 
+        let progress = if app.day_total_reminders > 0 {
+            Some((app.day_completed_count, app.day_total_reminders))
+        } else {
+            None
+        };
         components::DayView::render(
             frame,
             content[1],
@@ -231,6 +242,7 @@ fn render_month_layout(frame: &mut ratatui::Frame, area: Rect, app: &App, total_
             &app.day_events,
             &app.day_reminders,
             app.day_scroll,
+            progress,
         );
     }
 }

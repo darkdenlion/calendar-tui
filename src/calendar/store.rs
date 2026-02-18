@@ -343,6 +343,55 @@ impl Store {
         }
     }
 
+    pub fn fetch_completed_reminders(&self) -> Vec<Reminder> {
+        let predicate = unsafe {
+            self.store.predicateForCompletedRemindersWithCompletionDateStarting_ending_calendars(
+                None, None, None,
+            )
+        };
+
+        let (tx, rx) = mpsc::channel::<Vec<Reminder>>();
+
+        let block = RcBlock::new(move |reminders_ptr: *mut NSArray<EKReminder>| {
+            let mut result = Vec::new();
+            if !reminders_ptr.is_null() {
+                let reminders = unsafe { &*reminders_ptr };
+                let count = reminders.len();
+                for i in 0..count {
+                    let r = reminders.objectAtIndex(i);
+                    if let Some(reminder) = convert_reminder(&r) {
+                        result.push(reminder);
+                    }
+                }
+            }
+            let _ = tx.send(result);
+        });
+
+        unsafe {
+            self.store.fetchRemindersMatchingPredicate_completion(
+                &predicate,
+                &block,
+            );
+        };
+
+        let run_loop = NSRunLoop::currentRunLoop();
+        loop {
+            match rx.try_recv() {
+                Ok(reminders) => return reminders,
+                Err(mpsc::TryRecvError::Disconnected) => return Vec::new(),
+                Err(mpsc::TryRecvError::Empty) => {
+                    let until = NSDate::dateWithTimeIntervalSinceNow(0.1);
+                    let _ran = unsafe {
+                        run_loop.runMode_beforeDate(
+                            objc2_foundation::NSDefaultRunLoopMode,
+                            &until,
+                        )
+                    };
+                }
+            }
+        }
+    }
+
     // ── Reminder write operations ──
 
     pub fn toggle_reminder(&self, reminder_id: &str) -> Result<bool> {

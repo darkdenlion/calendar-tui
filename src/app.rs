@@ -45,7 +45,10 @@ pub struct App {
     pub day_scroll: usize,
     // Reminders (inline in day view)
     pub reminders: Vec<Reminder>,
+    pub completed_reminders: Vec<Reminder>,
     pub day_reminders: Vec<Reminder>,
+    pub day_completed_count: usize,
+    pub day_total_reminders: usize,
     // Event form
     pub form_state: Option<EventFormState>,
     // Detail popup (index into day_events or day_reminders via DayAction)
@@ -77,7 +80,10 @@ impl App {
             access_granted: false,
             day_scroll: 0,
             reminders: Vec::new(),
+            completed_reminders: Vec::new(),
             day_reminders: Vec::new(),
+            day_completed_count: 0,
+            day_total_reminders: 0,
             form_state: None,
             detail_item: None,
             show_help: false,
@@ -111,7 +117,7 @@ impl App {
 
         // Fetch reminders and populate day + month indicators
         self.refresh_reminders();
-        self.day_reminders = self.filter_day_reminders();
+        self.update_day_reminders();
 
         // Set scroll to first actionable item after data loads
         self.day_scroll = 0; // temporary, reset after reminders load
@@ -131,12 +137,12 @@ impl App {
 
     pub fn refresh_reminders(&mut self) {
         self.reminders = self.store.fetch_incomplete_reminders();
-        // Sort by calendar name, then by due date
         self.reminders.sort_by(|a, b| {
             a.calendar_name
                 .cmp(&b.calendar_name)
                 .then(a.due_date.cmp(&b.due_date))
         });
+        self.completed_reminders = self.store.fetch_completed_reminders();
     }
 
     pub fn week_start(&self) -> NaiveDate {
@@ -240,17 +246,30 @@ impl App {
 
     // ── Reminders (inline in day view) ──
 
-    /// Filter reminders for the selected date — only show reminders due on that exact date.
-    fn filter_day_reminders(&self) -> Vec<Reminder> {
+    /// Filter reminders for the selected date and compute progress counts.
+    fn update_day_reminders(&mut self) {
         let date = self.selected_date;
-        self.reminders
+        self.day_reminders = self
+            .reminders
             .iter()
             .filter(|r| match r.due_date {
                 Some(due) => due.date_naive() == date,
                 None => false,
             })
             .cloned()
-            .collect()
+            .collect();
+
+        // Count completed reminders due on this date
+        self.day_completed_count = self
+            .completed_reminders
+            .iter()
+            .filter(|r| match r.due_date {
+                Some(due) => due.date_naive() == date,
+                None => false,
+            })
+            .count();
+
+        self.day_total_reminders = self.day_reminders.len() + self.day_completed_count;
     }
 
     /// Total number of visual items in the day list (headers + items + spacers).
@@ -362,7 +381,7 @@ impl App {
                         let action = if new_state { "completed" } else { "uncompleted" };
                         self.status_message = Some(format!("Reminder {}", action));
                         self.refresh_reminders();
-                        self.day_reminders = self.filter_day_reminders();
+                        self.update_day_reminders();
                     }
                     Err(e) => {
                         self.status_message = Some(format!("Error: {}", e));
@@ -494,7 +513,7 @@ impl App {
         } else {
             self.day_events = self.store.events_for_date(self.selected_date);
             self.week_events = self.store.events_for_week(self.selected_date);
-            self.day_reminders = self.filter_day_reminders();
+            self.update_day_reminders();
             self.day_scroll = self.first_actionable_scroll();
         }
     }
