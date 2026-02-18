@@ -113,6 +113,14 @@ impl Theme {
 }
 
 fn config_path() -> Option<PathBuf> {
+    // Check ~/.config/ first (XDG convention, common for CLI tools on macOS)
+    if let Some(home) = dirs::home_dir() {
+        let xdg_path = home.join(".config").join("calendar-tui").join("theme.toml");
+        if xdg_path.exists() {
+            return Some(xdg_path);
+        }
+    }
+    // Fall back to platform config dir (~/Library/Application Support/ on macOS)
     dirs::config_dir().map(|d| d.join("calendar-tui").join("theme.toml"))
 }
 
