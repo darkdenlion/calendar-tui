@@ -140,17 +140,17 @@ fn handle_normal_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         (KeyCode::Char('d'), _) => app.delete_selected_event(),
         (KeyCode::Char(' '), _) => app.toggle_day_reminder(),
         (KeyCode::Enter, _) => app.show_detail(),
-        (KeyCode::Left, _) => app.prev_day(),
-        (KeyCode::Right, _) => app.next_day(),
-        (KeyCode::Up, _) => {
-            if app.view_mode == ViewMode::Day {
+        (KeyCode::Left, _) | (KeyCode::Char('h'), _) => app.prev_day(),
+        (KeyCode::Right, _) | (KeyCode::Char('l'), _) => app.next_day(),
+        (KeyCode::Up, _) | (KeyCode::Char('k'), _) => {
+            if app.view_mode == ViewMode::Day || app.view_mode == ViewMode::Month {
                 app.scroll_day_up();
             } else {
                 app.prev_week();
             }
         }
-        (KeyCode::Down, _) => {
-            if app.view_mode == ViewMode::Day {
+        (KeyCode::Down, _) | (KeyCode::Char('j'), _) => {
+            if app.view_mode == ViewMode::Day || app.view_mode == ViewMode::Month {
                 app.scroll_day_down();
             } else {
                 app.next_week();
@@ -239,15 +239,25 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App, w: u16) 
         _ => "",
     };
 
-    // Show status message if present, otherwise show hints
+    // Show status message if present, otherwise show context-aware hints
     let right_text = if let Some(ref msg) = app.status_message {
         format!(" {} ", msg)
-    } else if w >= 80 {
-        " \u{2190}\u{2191}\u{2192}\u{2193}:Nav [/]:Mon t:Today n:New d:Del Sp:Toggle q:Quit".to_string()
-    } else if w >= 50 {
-        " arrows:Nav n:New d:Del Sp:Toggle q:Quit".to_string()
     } else {
-        " q:Quit".to_string()
+        match app.view_mode {
+            ViewMode::Day | ViewMode::Month if w >= 80 => {
+                " hjkl:Nav [/]:Mon t:Today Enter:Detail Sp:Toggle n:New d:Del ?:Help q:Quit".to_string()
+            }
+            ViewMode::Day | ViewMode::Month if w >= 50 => {
+                " jk:Scroll Enter:Detail Sp:Toggle n:New q:Quit".to_string()
+            }
+            ViewMode::Week if w >= 70 => {
+                " hl:Day [/]:Mon t:Today n:New ?:Help q:Quit".to_string()
+            }
+            ViewMode::Week if w >= 50 => {
+                " arrows:Nav n:New q:Quit".to_string()
+            }
+            _ => " ?:Help q:Quit".to_string(),
+        }
     };
 
     let left = format!(" {}{} ", mode_str, focus_indicator);
