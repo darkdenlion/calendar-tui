@@ -50,6 +50,8 @@ pub struct App {
     pub form_state: Option<EventFormState>,
     // Detail popup (index into day_events or day_reminders via DayAction)
     pub detail_item: Option<DayAction>,
+    // Help overlay
+    pub show_help: bool,
     // Status message
     pub status_message: Option<String>,
     store: Store,
@@ -78,6 +80,7 @@ impl App {
             day_reminders: Vec::new(),
             form_state: None,
             detail_item: None,
+            show_help: false,
             status_message: None,
             store,
         };

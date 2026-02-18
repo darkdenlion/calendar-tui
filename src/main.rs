@@ -95,6 +95,11 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                 );
             }
 
+            // Render help overlay
+            if app.show_help {
+                render_help(frame, area);
+            }
+
             // Status bar
             render_status_bar(frame, layout[1], app, w);
         })?;
@@ -102,6 +107,14 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
         if let Some(key) = event::next_key_event(Duration::from_millis(100))? {
             // Clear status message on any key
             app.status_message = None;
+
+            // Help overlay takes priority
+            if app.show_help {
+                if key.code == KeyCode::Esc || key.code == KeyCode::Char('?') {
+                    app.show_help = false;
+                }
+                continue;
+            }
 
             // Detail popup takes priority
             if app.detail_item.is_some() {
@@ -158,6 +171,7 @@ fn handle_normal_input(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         }
         (KeyCode::Char('['), _) => app.prev_month(),
         (KeyCode::Char(']'), _) => app.next_month(),
+        (KeyCode::Char('?'), _) => app.show_help = true,
         _ => {}
     }
 }
@@ -272,4 +286,93 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App, w: u16) 
 
     let bar = Paragraph::new(line).style(theme::STATUS_STYLE);
     frame.render_widget(bar, area);
+}
+
+fn render_help(frame: &mut ratatui::Frame, area: Rect) {
+    use ratatui::style::{Color, Modifier, Style};
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
+
+    let popup_w = area.width.min(52).max(30);
+    let popup_h = area.height.min(22).max(12);
+    let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
+    let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
+    let popup_area = Rect::new(x, y, popup_w, popup_h);
+
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Keybindings ")
+        .title_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Green));
+
+    let inner = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    let key_style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+    let desc_style = Style::default();
+    let section_style = Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+
+    let lines = vec![
+        Line::from(Span::styled("Navigation", section_style)),
+        Line::from(vec![
+            Span::styled("  h/l ", key_style),
+            Span::styled("or ", theme::DIM_STYLE),
+            Span::styled("\u{2190}/\u{2192}  ", key_style),
+            Span::styled("Previous/next day", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  j/k ", key_style),
+            Span::styled("or ", theme::DIM_STYLE),
+            Span::styled("\u{2191}/\u{2193}  ", key_style),
+            Span::styled("Scroll day list", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  [/]       ", key_style),
+            Span::styled("Previous/next month", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  t         ", key_style),
+            Span::styled("Jump to today", desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("Views", section_style)),
+        Line::from(vec![
+            Span::styled("  1/2/3     ", key_style),
+            Span::styled("Month / Week / Day view", desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("Actions", section_style)),
+        Line::from(vec![
+            Span::styled("  Enter     ", key_style),
+            Span::styled("View event/reminder details", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  Space     ", key_style),
+            Span::styled("Toggle reminder completion", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  n         ", key_style),
+            Span::styled("Create new event", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  d         ", key_style),
+            Span::styled("Delete selected event", desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("  r         ", key_style),
+            Span::styled("Refresh reminders", desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  q", key_style),
+            Span::styled(" / ", theme::DIM_STYLE),
+            Span::styled("Esc     ", key_style),
+            Span::styled("Quit / close popup", desc_style),
+        ]),
+    ];
+
+    let para = Paragraph::new(lines).wrap(Wrap { trim: false });
+    frame.render_widget(para, inner);
 }
