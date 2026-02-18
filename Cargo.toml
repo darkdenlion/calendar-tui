@@ -13,3 +13,6 @@ objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-event-kit = "0.3"
 block2 = "0.6"
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+dirs = "6"

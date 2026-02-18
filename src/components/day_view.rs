@@ -107,11 +107,7 @@ impl DayView {
         let list = List::new(items)
             .block(block)
             .highlight_symbol("> ")
-            .highlight_style(
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            );
+            .highlight_style(theme::current().highlight);
         frame.render_stateful_widget(list, area, &mut state);
     }
 }

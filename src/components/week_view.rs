@@ -89,17 +89,15 @@ impl WeekView {
                 format!("{}", date.format("%d"))
             };
 
+            let t = theme::current();
             let style = if date == today && date == selected_date {
-                Style::default()
-                    .fg(ratatui::style::Color::Black)
-                    .bg(ratatui::style::Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
+                t.today.add_modifier(Modifier::BOLD)
             } else if date == selected_date {
-                theme::SELECTED_STYLE
+                t.selected
             } else if date == today {
-                theme::TODAY_STYLE
+                t.today
             } else {
-                theme::HEADER_STYLE
+                t.header
             };
 
             let label = Paragraph::new(Line::from(Span::styled(

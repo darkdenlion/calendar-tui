@@ -108,15 +108,13 @@ impl MonthView {
                         format!("{:^width$}", num, width = cell_w)
                     };
 
+                    let t = theme::current();
                     let style = if date == today && date == selected_date {
-                        Style::default()
-                            .fg(ratatui::style::Color::Black)
-                            .bg(ratatui::style::Color::Yellow)
-                            .add_modifier(Modifier::BOLD)
+                        t.today.add_modifier(Modifier::BOLD)
                     } else if date == selected_date {
-                        theme::SELECTED_STYLE
+                        t.selected
                     } else if date == today {
-                        theme::TODAY_STYLE
+                        t.today
                     } else {
                         Style::default()
                     };
