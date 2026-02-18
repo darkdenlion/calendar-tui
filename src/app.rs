@@ -98,8 +98,6 @@ impl App {
         self.month_events = self.store.events_for_month(year, month);
         self.day_events = self.store.events_for_date(self.selected_date);
         self.week_events = self.store.events_for_week(self.selected_date);
-        self.day_scroll = 0;
-
         self.days_with_events.clear();
         for ev in &self.month_events {
             let ev_date = ev.start.date_naive();
@@ -112,6 +110,9 @@ impl App {
         self.refresh_reminders();
         self.day_reminders = self.filter_day_reminders();
 
+        // Set scroll to first actionable item after data loads
+        self.day_scroll = 0; // temporary, reset after reminders load
+
         self.days_with_reminders.clear();
         for rem in &self.reminders {
             if let Some(due) = &rem.due_date {
@@ -121,6 +122,8 @@ impl App {
                 }
             }
         }
+
+        self.day_scroll = self.first_actionable_scroll();
     }
 
     pub fn refresh_reminders(&mut self) {
@@ -185,13 +188,51 @@ impl App {
     }
 
     pub fn scroll_day_down(&mut self) {
-        if self.day_scroll < self.day_list_len().saturating_sub(1) {
-            self.day_scroll += 1;
+        let len = self.day_list_len();
+        if len == 0 {
+            return;
+        }
+        let mut next = self.day_scroll + 1;
+        // Skip headers and spacers
+        while next < len {
+            if !matches!(self.day_action_at(next), DayAction::None) {
+                break;
+            }
+            next += 1;
+        }
+        if next < len {
+            self.day_scroll = next;
         }
     }
 
     pub fn scroll_day_up(&mut self) {
-        self.day_scroll = self.day_scroll.saturating_sub(1);
+        if self.day_scroll == 0 {
+            return;
+        }
+        let mut prev = self.day_scroll - 1;
+        // Skip headers and spacers
+        loop {
+            if !matches!(self.day_action_at(prev), DayAction::None) {
+                break;
+            }
+            if prev == 0 {
+                // No actionable item above, stay at first actionable
+                return;
+            }
+            prev -= 1;
+        }
+        self.day_scroll = prev;
+    }
+
+    /// Find the first actionable item position in the day list.
+    fn first_actionable_scroll(&self) -> usize {
+        let len = self.day_list_len();
+        for i in 0..len {
+            if !matches!(self.day_action_at(i), DayAction::None) {
+                return i;
+            }
+        }
+        0
     }
 
     // ── Reminders (inline in day view) ──
@@ -234,6 +275,11 @@ impl App {
 
     /// Determine what kind of item is at the current scroll position.
     pub fn day_action_at_scroll(&self) -> DayAction {
+        self.day_action_at(self.day_scroll)
+    }
+
+    /// Determine what kind of item is at the given position.
+    pub fn day_action_at(&self, scroll: usize) -> DayAction {
         let all_day_indices: Vec<usize> = self
             .day_events
             .iter()
@@ -249,7 +295,6 @@ impl App {
             .map(|(i, _)| i)
             .collect();
         let rems = self.day_reminders.len();
-        let scroll = self.day_scroll;
 
         let mut pos = 0;
 
@@ -440,7 +485,6 @@ impl App {
     fn on_date_changed(&mut self) {
         let old_month = self.month_events.first().map(|e| e.start.date_naive().month());
         let new_month = self.selected_date.month();
-        self.day_scroll = 0;
 
         if old_month != Some(new_month) || self.month_events.is_empty() {
             self.refresh_events();
@@ -448,6 +492,7 @@ impl App {
             self.day_events = self.store.events_for_date(self.selected_date);
             self.week_events = self.store.events_for_week(self.selected_date);
             self.day_reminders = self.filter_day_reminders();
+            self.day_scroll = self.first_actionable_scroll();
         }
     }
 }

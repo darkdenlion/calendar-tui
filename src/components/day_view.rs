@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 
@@ -20,7 +20,7 @@ impl DayView {
         date: NaiveDate,
         events: &[CalendarEvent],
         reminders: &[Reminder],
-        scroll: usize,
+        selected: usize,
     ) {
         let w = area.width as usize;
 
@@ -62,7 +62,7 @@ impl DayView {
             return;
         }
 
-        let inner_w = area.width.saturating_sub(2) as usize;
+        let inner_w = area.width.saturating_sub(4) as usize; // account for highlight symbol
 
         let all_day: Vec<&CalendarEvent> = events.iter().filter(|e| e.is_all_day).collect();
         let timed: Vec<&CalendarEvent> = events.iter().filter(|e| !e.is_all_day).collect();
@@ -102,11 +102,17 @@ impl DayView {
             items.push(format_event(ev, inner_w, false));
         }
 
-        // Apply scroll
-        let visible_items: Vec<ListItem> = items.into_iter().skip(scroll).collect();
-
-        let list = List::new(visible_items).block(block);
-        frame.render_widget(list, area);
+        // Use ListState for selection highlight with auto-scroll
+        let mut state = ListState::default().with_selected(Some(selected));
+        let list = List::new(items)
+            .block(block)
+            .highlight_symbol("> ")
+            .highlight_style(
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            );
+        frame.render_stateful_widget(list, area, &mut state);
     }
 }
 
