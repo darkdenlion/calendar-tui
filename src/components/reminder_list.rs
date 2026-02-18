@@ -30,19 +30,19 @@ impl ReminderList {
         let border_style = if focused {
             Style::default().fg(ratatui::style::Color::Cyan)
         } else {
-            theme::BORDER_STYLE
+            theme::current().border
         };
 
         let block = Block::default()
             .title(title)
-            .title_style(theme::HEADER_STYLE)
+            .title_style(theme::current().header)
             .borders(Borders::ALL)
             .border_style(border_style);
 
         if reminders.is_empty() {
             let inner = block.inner(area);
             frame.render_widget(block, area);
-            let msg = Paragraph::new("No reminders").style(theme::DIM_STYLE);
+            let msg = Paragraph::new("No reminders").style(theme::current().dim);
             frame.render_widget(msg, inner);
             return;
         }
@@ -82,7 +82,7 @@ impl ReminderList {
                 Span::styled(
                     format!(" {} ", checkbox),
                     if is_selected {
-                        theme::SELECTED_STYLE
+                        theme::current().selected
                     } else {
                         Style::default()
                     },
@@ -90,7 +90,7 @@ impl ReminderList {
                 Span::styled(
                     truncate(&reminder.title, inner_w.saturating_sub(6)),
                     if is_selected {
-                        theme::SELECTED_STYLE
+                        theme::current().selected
                     } else {
                         title_style
                     },
@@ -101,7 +101,7 @@ impl ReminderList {
             if let Some(ref due) = reminder.due_date {
                 let due_str = format!(" {}", due.format("%m/%d"));
                 if spans.iter().map(|s| s.width()).sum::<usize>() + due_str.len() < inner_w {
-                    spans.push(Span::styled(due_str, theme::DIM_STYLE));
+                    spans.push(Span::styled(due_str, theme::current().dim));
                 }
             }
 

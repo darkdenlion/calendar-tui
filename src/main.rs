@@ -44,7 +44,7 @@ fn run(terminal: &mut tui::Tui, app: &mut App) -> Result<()> {
                      System Settings > Privacy & Security > Calendars\n\n\
                      Press 'q' to quit.",
                 )
-                .style(theme::HEADER_STYLE);
+                .style(theme::current().header);
                 frame.render_widget(msg, area);
                 return;
             }
@@ -291,12 +291,12 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App, w: u16) 
     let padding = " ".repeat(padding_len);
 
     let line = Line::from(vec![
-        Span::styled(left, theme::STATUS_STYLE),
-        Span::styled(padding, theme::STATUS_STYLE),
-        Span::styled(right_text, theme::STATUS_STYLE),
+        Span::styled(left, theme::current().status),
+        Span::styled(padding, theme::current().status),
+        Span::styled(right_text, theme::current().status),
     ]);
 
-    let bar = Paragraph::new(line).style(theme::STATUS_STYLE);
+    let bar = Paragraph::new(line).style(theme::current().status);
     frame.render_widget(bar, area);
 }
 
@@ -330,13 +330,13 @@ fn render_help(frame: &mut ratatui::Frame, area: Rect) {
         Line::from(Span::styled("Navigation", section_style)),
         Line::from(vec![
             Span::styled("  h/l ", key_style),
-            Span::styled("or ", theme::DIM_STYLE),
+            Span::styled("or ", theme::current().dim),
             Span::styled("\u{2190}/\u{2192}  ", key_style),
             Span::styled("Previous/next day", desc_style),
         ]),
         Line::from(vec![
             Span::styled("  j/k ", key_style),
-            Span::styled("or ", theme::DIM_STYLE),
+            Span::styled("or ", theme::current().dim),
             Span::styled("\u{2191}/\u{2193}  ", key_style),
             Span::styled("Scroll day list", desc_style),
         ]),
@@ -379,7 +379,7 @@ fn render_help(frame: &mut ratatui::Frame, area: Rect) {
         Line::from(""),
         Line::from(vec![
             Span::styled("  q", key_style),
-            Span::styled(" / ", theme::DIM_STYLE),
+            Span::styled(" / ", theme::current().dim),
             Span::styled("Esc     ", key_style),
             Span::styled("Quit / close popup", desc_style),
         ]),

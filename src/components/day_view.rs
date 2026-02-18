@@ -50,15 +50,15 @@ impl DayView {
 
         let block = Block::default()
             .title(title)
-            .title_style(theme::HEADER_STYLE)
-            .title_bottom(Line::from(Span::styled(count_str, theme::DIM_STYLE)))
+            .title_style(theme::current().header)
+            .title_bottom(Line::from(Span::styled(count_str, theme::current().dim)))
             .borders(Borders::ALL)
-            .border_style(theme::BORDER_STYLE);
+            .border_style(theme::current().border);
 
         if events.is_empty() && reminders.is_empty() {
             let inner = block.inner(area);
             frame.render_widget(block, area);
-            let msg = Paragraph::new("No events or reminders").style(theme::DIM_STYLE);
+            let msg = Paragraph::new("No events or reminders").style(theme::current().dim);
             frame.render_widget(msg, inner);
             return;
         }
@@ -108,7 +108,7 @@ impl DayView {
                         Span::styled(bar, Style::default().fg(Color::Green)),
                         Span::styled(
                             format!(" {}/{}", completed, total),
-                            theme::DIM_STYLE,
+                            theme::current().dim,
                         ),
                     ])
                 } else {
@@ -168,7 +168,7 @@ fn format_event(ev: &CalendarEvent, max_width: usize, is_all_day: bool) -> ListI
     let used = 2 + time_str.len() + ev.title.len();
     if let Some(ref loc) = ev.location {
         if !loc.is_empty() && used + 4 + loc.len() <= max_width {
-            spans.push(Span::styled(format!(" @ {}", loc), theme::DIM_STYLE));
+            spans.push(Span::styled(format!(" @ {}", loc), theme::current().dim));
         }
     }
 
@@ -201,7 +201,7 @@ fn format_reminder(
     // Show calendar name for context
     spans.push(Span::styled(
         format!(" ({})", rem.calendar_name),
-        theme::DIM_STYLE,
+        theme::current().dim,
     ));
 
     ListItem::new(Line::from(spans))
@@ -263,17 +263,17 @@ fn render_event_detail(frame: &mut Frame, area: Rect, ev: &CalendarEvent) {
     // Time
     lines.push(Line::from(""));
     if ev.is_all_day {
-        lines.push(Line::from(Span::styled("All day", theme::DIM_STYLE)));
+        lines.push(Line::from(Span::styled("All day", theme::current().dim)));
     } else {
         lines.push(Line::from(vec![
-            Span::styled("Time: ", theme::DIM_STYLE),
+            Span::styled("Time: ", theme::current().dim),
             Span::styled(ev.duration_display(), Style::default()),
         ]));
     }
 
     // Date
     lines.push(Line::from(vec![
-        Span::styled("Date: ", theme::DIM_STYLE),
+        Span::styled("Date: ", theme::current().dim),
         Span::styled(
             ev.start.format("%A, %B %d, %Y").to_string(),
             Style::default(),
@@ -285,7 +285,7 @@ fn render_event_detail(frame: &mut Frame, area: Rect, ev: &CalendarEvent) {
         if !loc.is_empty() {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
-                Span::styled("Location: ", theme::DIM_STYLE),
+                Span::styled("Location: ", theme::current().dim),
                 Span::styled(loc.clone(), Style::default()),
             ]));
         }
@@ -295,7 +295,7 @@ fn render_event_detail(frame: &mut Frame, area: Rect, ev: &CalendarEvent) {
     if let Some(ref notes) = ev.notes {
         if !notes.is_empty() {
             lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled("Notes:", theme::DIM_STYLE)));
+            lines.push(Line::from(Span::styled("Notes:", theme::current().dim)));
             for line in notes.lines() {
                 lines.push(Line::from(line.to_string()));
             }
@@ -306,7 +306,7 @@ fn render_event_detail(frame: &mut Frame, area: Rect, ev: &CalendarEvent) {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "Press Esc to close",
-        theme::DIM_STYLE,
+        theme::current().dim,
     )));
 
     let para = Paragraph::new(lines).wrap(Wrap { trim: false });
@@ -345,14 +345,14 @@ fn render_reminder_detail(frame: &mut Frame, area: Rect, rem: &Reminder) {
     // Status
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        Span::styled("Status: ", theme::DIM_STYLE),
+        Span::styled("Status: ", theme::current().dim),
         Span::styled(status, Style::default()),
     ]));
 
     // Due date
     if let Some(due) = &rem.due_date {
         lines.push(Line::from(vec![
-            Span::styled("Due: ", theme::DIM_STYLE),
+            Span::styled("Due: ", theme::current().dim),
             Span::styled(
                 due.format("%A, %B %d, %Y").to_string(),
                 Style::default(),
@@ -360,8 +360,8 @@ fn render_reminder_detail(frame: &mut Frame, area: Rect, rem: &Reminder) {
         ]));
     } else {
         lines.push(Line::from(vec![
-            Span::styled("Due: ", theme::DIM_STYLE),
-            Span::styled("No date set", theme::DIM_STYLE),
+            Span::styled("Due: ", theme::current().dim),
+            Span::styled("No date set", theme::current().dim),
         ]));
     }
 
@@ -374,7 +374,7 @@ fn render_reminder_detail(frame: &mut Frame, area: Rect, rem: &Reminder) {
             _ => "None",
         };
         lines.push(Line::from(vec![
-            Span::styled("Priority: ", theme::DIM_STYLE),
+            Span::styled("Priority: ", theme::current().dim),
             Span::styled(priority_str, Style::default()),
         ]));
     }
@@ -383,7 +383,7 @@ fn render_reminder_detail(frame: &mut Frame, area: Rect, rem: &Reminder) {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "Press Esc to close",
-        theme::DIM_STYLE,
+        theme::current().dim,
     )));
 
     let para = Paragraph::new(lines).wrap(Wrap { trim: false });

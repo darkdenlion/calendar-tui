@@ -43,9 +43,9 @@ impl MonthView {
 
         let block = Block::default()
             .title(title)
-            .title_style(theme::HEADER_STYLE)
+            .title_style(theme::current().header)
             .borders(Borders::ALL)
-            .border_style(theme::BORDER_STYLE);
+            .border_style(theme::current().border);
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -64,7 +64,7 @@ impl MonthView {
                 } else {
                     format!("{:^width$}", d, width = cell_w)
                 };
-                Span::styled(formatted, theme::HEADER_STYLE)
+                Span::styled(formatted, theme::current().header)
             })
             .collect();
         let header = Line::from(header_cells);

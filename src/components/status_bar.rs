@@ -34,12 +34,12 @@ impl StatusBar {
         let padding = " ".repeat(w.saturating_sub(mode_str.len() + 1 + hints.len()));
 
         let line = Line::from(vec![
-            Span::styled(format!(" {} ", mode_str), theme::STATUS_STYLE),
-            Span::styled(padding, theme::STATUS_STYLE),
-            Span::styled(hints.to_string(), theme::STATUS_STYLE),
+            Span::styled(format!(" {} ", mode_str), theme::current().status),
+            Span::styled(padding, theme::current().status),
+            Span::styled(hints.to_string(), theme::current().status),
         ]);
 
-        let bar = Paragraph::new(line).style(theme::STATUS_STYLE);
+        let bar = Paragraph::new(line).style(theme::current().status);
         frame.render_widget(bar, area);
     }
 }

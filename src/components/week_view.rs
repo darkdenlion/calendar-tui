@@ -29,9 +29,9 @@ impl WeekView {
                 " Week of {} ",
                 week_start.format("%b %d, %Y")
             ))
-            .title_style(theme::HEADER_STYLE)
+            .title_style(theme::current().header)
             .borders(Borders::ALL)
-            .border_style(theme::BORDER_STYLE);
+            .border_style(theme::current().border);
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -123,7 +123,7 @@ impl WeekView {
             };
             let time_para = Paragraph::new(Line::from(Span::styled(
                 time_label,
-                theme::DIM_STYLE,
+                theme::current().dim,
             )));
             frame.render_widget(time_para, cols[0].intersection(rows[row_idx]));
 

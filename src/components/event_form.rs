@@ -181,11 +181,11 @@ impl EventForm {
 
         let help = Line::from(vec![
             Span::styled("Tab", Style::default().add_modifier(Modifier::BOLD)),
-            Span::styled(":Next ", theme::DIM_STYLE),
+            Span::styled(":Next ", theme::current().dim),
             Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-            Span::styled(":Save ", theme::DIM_STYLE),
+            Span::styled(":Save ", theme::current().dim),
             Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
-            Span::styled(":Cancel", theme::DIM_STYLE),
+            Span::styled(":Cancel", theme::current().dim),
         ]);
         frame.render_widget(Paragraph::new(help), rows[7]);
     }
@@ -205,7 +205,7 @@ fn render_field(frame: &mut Frame, area: Rect, label: &str, value: &str, active:
     if !label.is_empty() {
         spans.push(Span::styled(
             format!("{:<width$}", label, width = label_w),
-            theme::DIM_STYLE,
+            theme::current().dim,
         ));
     }
     spans.push(Span::styled(format!("{}{}", value, cursor), style));
